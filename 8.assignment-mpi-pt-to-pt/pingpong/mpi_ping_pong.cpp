@@ -26,17 +26,17 @@ int main (int argc, char* argv[]) {
     MPI_Send(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
     cout<<"Send from 0 to 1"<<endl;
     MPI_Recv(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-    cout<<"Received after adding "<<endl;
-    cout<<"Value after adding: " <<number<<endl;
+    cout<<"After adding Recive"<<endl;
+    cout<<"After adding: " <<number<<endl;
   } else if (rank == 1) {
       
       //receive add and send
     MPI_Recv(&number, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-    cout<<"Receive to 1 from 0"<<endl;
+    cout<<"Received to 1 from 0"<<endl;
 
     number = number + 2;
-    MPI_Send(&number, Received after adding, 0, MPI_COMM_WORLD);
-    cout<<"Sending to 1 from 0 after adding"<<endl;
+    MPI_Send(&number, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    cout<<"Sending to 0 from 1 after adding"<<endl;
 
   }
 

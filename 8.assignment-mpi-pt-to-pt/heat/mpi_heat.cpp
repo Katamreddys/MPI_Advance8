@@ -8,58 +8,13 @@ using namespace std;
 extern "C" {
  #endif
 
-  int check2DHeat(double** H, long n, long rank, long P, long k); //this assumes array of array and grid block decomposition
+  double generate2DHeat(long N, long global_i, long global_j);
+
+  int check2DHeat(double** H, long N, long rank, long P, long k); //this assumes array of array and grid block decomposition
 
  #ifdef __cplusplus
 }
 #endif
-
-/***********************************************
- *         NOTES on check2DHeat.
- ***********************************************
- *         
- *  First of, I apologize its wonky. 
- *
- *  Email me ktibbett@uncc.edu with any issues/concerns with this. Dr. Saule or the other
- *    TA's are not familiar with how it works. 
- *
- * Params:
- *  n - is the same N from the command line, NOT the process's part of N
- *  P - the total amount of processes ie what MPI_Comm_size gives you.
- *  k - assumes n/2 > k-1 , otherwise may return false negatives.
- *
- *   
- * Disclaimer:
- ***
- *** Broken for P is 9. Gives false negatives, for me it was always
- ***  ranks 0, 3, 6. I have not found issues with 1, 4, or 16, and these
- ***  are what `make test` will use.
- ***
- *
- * Usage:
- *  When code is WRONG returns TRUE. Short example below
- *  if (check2DHeat(...)) {
- *    // oh no it is (maybe) wrong  
- *    std::cout<<"rank: "<<rank<<" is incorrect"<<std::endl;
- *  }
- *
- *
- *
- *  I suggest commenting this out when running the bench
- *
- *
- * - Kyle
- *
- *************/
-
-
-// Use similarily as the genA, genx from matmult assignment.
-double genH0(long row, long col, long n) {
-  double val = (double)(col == (n/2));
-  return val;
-}
-
-
 
 int main(int argc, char* argv[]) {
 
@@ -68,148 +23,147 @@ int main(int argc, char* argv[]) {
     return -1;
   }
 
-  // declare and init command line params
   MPI_Init(&argc,&argv);
-  long n, K;
-  n = atol(argv[1]);
+  long N, K;
+  N = atol(argv[1]);
   K = atol(argv[2]);
 
-  int worldrank,np;
+  int wd,NoP;
    
-   MPI_Comm_rank(MPI_COMM_WORLD,&worldrank);
-   MPI_Comm_size(MPI_COMM_WORLD,&np);
+   MPI_Comm_rank(MPI_COMM_WORLD,&wd);
+   MPI_Comm_size(MPI_COMM_WORLD,&NoP);
 
-   int p = sqrt(np);
-   long each_div = n/p; 
+   int p = sqrt(NoP);
+   long ED = N/p; 
    
-   int row_div = worldrank/p,col_div = worldrank%p;
+   int RD = wd/p,CD = wd%p;
   // use double for heat 2d 
 
-   double**  H = new double*[each_div];
-   double**  G = new double*[each_div];
-   for(long i=0;i<each_div;i++)
+   double**  Harr = new double*[ED];
+   double**  GArr = new double*[ED];
+   for(long i=0;i<ED;i++)
      {
-     H[i] = new double[each_div];
-     G[i] = new double[each_div];
+     Harr[i] = new double[ED];
+     GArr[i] = new double[ED];
      
    }
    
-   long rowstart = (row_div*each_div),colstart = (col_div*each_div);
-   long rowend = rowstart+each_div,colend = colstart+each_div;
+   long RS = (RD*ED),CS = (CD*ED);
+   long RE = RS+ED,CE = CS+ED;
 
-  for (long row = rowstart,rset=0; row<rowend; row++,rset++) {
-    for (long col= colstart,cset=0; col<colend; col++,cset++) {
-       H[rset][cset] = genH0(row, col,n);
+  for (long global_i = RS,RST=0; global_i<RE; global_i++,RST++) {
+    for (long global_j= CS,CST=0; global_j<CE; global_j++,CST++) {
+       Harr[RST][CST] = generate2DHeat(N,global_i, global_j);
     }
   } 
   // write code here
   
-  double *tp = new double[each_div];
-  double *btm = new double[each_div];
-  double *rgt = new double[each_div];
-  double *lft = new double[each_div];
-  double *tp1 = new double[each_div];
-  double *btm1 = new double[each_div];
-  double *rgt1 = new double[each_div];
-  double *lft1 = new double[each_div];
+  double *TArr = new double[ED];
+  double *BArr = new double[ED];
+  double *RArr = new double[ED];
+  double *LArr = new double[ED];
+  double *TLArr = new double[ED];
+  double *BLArr = new double[ED];
+  double *RLArr = new double[ED];
+  double *LLArr = new double[ED];
   
   int top,bottom,left,right;
-  left =col_div?worldrank-1:-1;
-  right = (col_div == (p-1))?-1:worldrank+1;
-  top = worldrank-p;
-  bottom = worldrank+p;
+  left =CD?wd-1:-1;
+  right = (CD == (p-1))?-1:wd+1;
+  top = wd-p;
+  bottom = wd+p;
   MPI_Status status[4];
   MPI_Request requests[8];
   long count = 0;
   double start = MPI_Wtime();
   for (long it = 0; it<K; it++) 
   {
-     for(long ind =0,ite = 0;ind < each_div;ind++)
+     for(long ind =0,ite = 0;ind < ED;ind++)
        {
-   lft[ite] = H[ind][0];
-   rgt[ite] = H[ind][each_div-1];
-   tp[ite]  = H[0][ind];
-   btm[ite] = H[each_div-1][ind];
-   lft1[ite] = H[ind][0];
-   rgt1[ite] = H[ind][each_div-1];
-   tp1[ite]  = H[0][ind];
-   btm1[ite] = H[each_div-1][ind];
+   LArr[ite] = Harr[ind][0];
+   RArr[ite] = Harr[ind][ED-1];
+   TArr[ite]  = Harr[0][ind];
+   BArr[ite] = Harr[ED-1][ind];
+   LLArr[ite] = Harr[ind][0];
+   RLArr[ite] = Harr[ind][ED-1];
+   TLArr[ite]  = Harr[0][ind];
+   BLArr[ite] = Harr[ED-1][ind];
    ite++;
        }
      count = 0;
-     //  cout<<"I am rank "<<worldrank<<endl; 
+     //  cout<<"I am rank "<<wd<<endl; 
      if(top>=0){
-       MPI_Isend(tp1,each_div,MPI_DOUBLE,top,0,MPI_COMM_WORLD,&requests[count]);
+       MPI_Isend(TLArr,ED,MPI_DOUBLE,top,0,MPI_COMM_WORLD,&requests[count]);
        count++;
      }
      if(right != -1){
-       MPI_Isend(rgt1,each_div,MPI_DOUBLE,right,1,MPI_COMM_WORLD,&requests[count]);
+       MPI_Isend(RLArr,ED,MPI_DOUBLE,right,1,MPI_COMM_WORLD,&requests[count]);
        count++;
      }
-     if(bottom < np){
-       MPI_Isend(btm1,each_div,MPI_DOUBLE,bottom,2,MPI_COMM_WORLD,&requests[count]);
+     if(bottom < NoP){
+       MPI_Isend(BLArr,ED,MPI_DOUBLE,bottom,2,MPI_COMM_WORLD,&requests[count]);
        count++;
      }
      if(left != -1){
-       MPI_Isend(lft1,each_div,MPI_DOUBLE,left,3,MPI_COMM_WORLD,&requests[count]);
+       MPI_Isend(LLArr,ED,MPI_DOUBLE,left,3,MPI_COMM_WORLD,&requests[count]);
        count++;
      }
-     for(long i=1;(i+1)<each_div;i++)
+     for(long i=1;(i+1)<ED;i++)
        {
-   for(long j=1;(j+1)<each_div;j++)
+   for(long j=1;(j+1)<ED;j++)
      {
-       G[i][j] = (H[i][j] + H[i-1][j] + H[i+1][j] + H[i][j-1] + H[i][j+1])/5;
+       GArr[i][j] = (Harr[i][j] + Harr[i-1][j] + Harr[i+1][j] + Harr[i][j-1] + Harr[i][j+1])/5;
      }
        }
-     // cout<<"I am rank "<<worldrank<<" and sent "<<count<<" messages"<<endl; 
+     // cout<<"I am rank "<<wd<<" and sent "<<count<<" messages"<<endl; 
      // MPI_Waitall(count,requests,status);
      if(top >= 0){
-       MPI_Recv(tp,each_div,MPI_DOUBLE,top,2,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+       MPI_Recv(TArr,ED,MPI_DOUBLE,top,2,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
       
      }
      if(right != -1){
-       MPI_Recv(rgt,each_div,MPI_DOUBLE,right,3,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+       MPI_Recv(RArr,ED,MPI_DOUBLE,right,3,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
       
      }
-     if(bottom < np){
-       MPI_Recv(btm,each_div,MPI_DOUBLE,bottom,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+     if(bottom < NoP){
+       MPI_Recv(BArr,ED,MPI_DOUBLE,bottom,0,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
        
      }
      if(left != -1){
-       MPI_Recv(lft,each_div,MPI_DOUBLE,left,1,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+       MPI_Recv(LArr,ED,MPI_DOUBLE,left,1,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
        
      }
-     // cout<<"I am rank "<<worldrank<<" and received "<<count<<" messages"<<endl;
-     G[0][0] = (H[0][0] + tp[0] + lft[0] + H[0][1] + H[1][0])/5;
-     G[0][each_div-1] = (H[0][each_div-1] + tp[each_div-1] + rgt[0]+H[0][each_div-2]+H[1][each_div-1])/5;
-     G[each_div-1][0] = (H[each_div-1][0] + btm[0] + lft[each_div-1]+H[each_div-1][1]+H[each_div-2][0])/5;
-     G[each_div-1][each_div-1] = (H[each_div-1][each_div-1] + btm[each_div-1] +
-          rgt[each_div-1]+H[each_div-1][each_div-2]+H[each_div-2][each_div-1])/5;
-     for(long i=1,j=1;i<each_div-1;i++,j++)
+     // cout<<"I am rank "<<wd<<" and received "<<count<<" messages"<<endl;
+     GArr[0][0] = (Harr[0][0] + TArr[0] + LArr[0] + Harr[0][1] + Harr[1][0])/5;
+     GArr[0][ED-1] = (Harr[0][ED-1] + TArr[ED-1] + RArr[0]+Harr[0][ED-2]+Harr[1][ED-1])/5;
+     GArr[ED-1][0] = (Harr[ED-1][0] + BArr[0] + LArr[ED-1]+Harr[ED-1][1]+Harr[ED-2][0])/5;
+     GArr[ED-1][ED-1] = (Harr[ED-1][ED-1] + BArr[ED-1] +
+          RArr[ED-1]+Harr[ED-1][ED-2]+Harr[ED-2][ED-1])/5;
+     for(long i=1,j=1;i<ED-1;i++,j++)
    {
-      G[0][i] = (H[0][i]+H[1][i]+tp[i]+H[0][i-1]+H[0][i+1])/5;
-      G[each_div-1][i] = (H[each_div-1][i]+H[each_div-2][i]+btm[i]+H[each_div-1][i-1]+H[each_div-1][i+1])/5;
-      G[j][0] = (H[j][0]+lft[j]+H[j][1]+H[j-1][0]+H[j+1][0])/5;
-      G[j][each_div-1] = (H[j][each_div-1]+H[j-1][each_div-1]+H[j+1][each_div]+rgt[j]+H[j][each_div-2])/5;
+      GArr[0][i] = (Harr[0][i]+Harr[1][i]+TArr[i]+Harr[0][i-1]+Harr[0][i+1])/5;
+      GArr[ED-1][i] = (Harr[ED-1][i]+Harr[ED-2][i]+BArr[i]+Harr[ED-1][i-1]+Harr[ED-1][i+1])/5;
+      GArr[j][0] = (Harr[j][0]+LArr[j]+Harr[j][1]+Harr[j-1][0]+Harr[j+1][0])/5;
+      GArr[j][ED-1] = (Harr[j][ED-1]+Harr[j-1][ED-1]+Harr[j+1][ED]+RArr[j]+Harr[j][ED-2])/5;
    }
-      H = G;
+      Harr = GArr;
       // check2DHeat(double** H, long n, long rank, long P, long k)
-      check2DHeat(H,n,worldrank,np,it);
+      check2DHeat(Harr,N,wd,NoP,it);
       MPI_Waitall(count,requests,status);
              
    }
-  if(worldrank == 0)
+  if(wd == 0)
     {
        double end = MPI_Wtime();
        cerr<<end-start<<endl; 
     }
- for(long i=0;i<each_div;i++)
-   delete[] H[i];
-  delete[] H;
-  delete[] tp;
-  delete[] btm;
-  delete[] rgt;
-  delete[] lft;
+ for(long i=0;i<ED;i++)
+   delete[] Harr[i];
+  delete[] Harr;
+  delete[] TArr;
+  delete[] BArr;
+  delete[] RArr;
+  delete[] LArr;
 
   MPI_Finalize();
 

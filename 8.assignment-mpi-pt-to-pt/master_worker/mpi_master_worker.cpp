@@ -26,7 +26,7 @@ int main (int argc, char* argv[]) {
   
     MPI_Init( &argc, &argv );
 	
-	int rank,size;
+	int rankMPI,sizeMpi;
         int fid = atoi(argv[1]);
 	float a  = atof(argv[2]);
 	float b = atof(argv[3]);
@@ -51,29 +51,28 @@ int main (int argc, char* argv[]) {
                 return -1;                
 
    };
-    float limit = (b-a)/n;
-    MPI_Comm_rank( MPI_COMM_WORLD, &rank );
-	MPI_Comm_size( MPI_COMM_WORLD, &size );
-	float par_integration;
-	int p = n/size;
+    MPI_Comm_rank( MPI_COMM_WORLD, &rankMPI );
+	MPI_Comm_size( MPI_COMM_WORLD, &sizeMpi );
+	float IntSumm;
+	int p = n/sizeMpi;
 	
     //MPI_Comm_split( MPI_COMM_WORLD, rank == 0, 0, &new_comm );
-    if (rank == 0) 
+    if (rankMPI == 0) 
 	{
-		double tstart = MPI_Wtime(); 
-		float integralval = 0.0;
-		for(int i=1;i<size;i++)
+		double Time_Start = MPI_Wtime(); 
+		float ValInt = 0.0;
+		for(int i=1;i<sizeMpi;i++)
 		{
 			
 			int start = (i-1)*p,end = i*p;
-			if(i == (size-1))
+			if(i == (sizeMpi-1))
 				end = n;
 			MPI_Send(&start,1,MPI_INT,i,0,MPI_COMM_WORLD);
 			MPI_Send(&end,1,MPI_INT,i,1,MPI_COMM_WORLD);
 			
 		}
 		int nr =1;
-		while(nr != size)
+		while(nr != sizeMpi)
 		{
 			float par_inte;
 			int cnt;
@@ -83,11 +82,11 @@ int main (int argc, char* argv[]) {
 			int value = -1;
 			MPI_Send(&value,1,MPI_INT,status.MPI_SOURCE,0,MPI_COMM_WORLD);
 			nr++;
-			integralval += par_inte;
+			ValInt += par_inte;
 		}
            	double tend = MPI_Wtime(); 
-		cout<<limit*integralval<<endl;
-		cerr<<tend-tstart<<endl;
+		cout<<((b-a)/n)*ValInt<<endl;
+		cerr<<tend-Time_Start<<endl;
 	}
     else
 	{ 	
@@ -97,13 +96,13 @@ int main (int argc, char* argv[]) {
 			if(start == -1)
 				break; 
 			MPI_Recv(&end,1,MPI_INT,0,1,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
-			par_integration = 0.0;
+			IntSumm = 0.0;
 			for(int i=start;i<end;i++)
 			{
-				float x = (i+0.5)*limit;
-				par_integration += func(a+x,intensity);
+				float x = (i+0.5)*((b-a)/n);
+				IntSumm += func(a+x,intensity);
 			}
-			MPI_Send(&par_integration,1,MPI_FLOAT,0,2,MPI_COMM_WORLD);
+			MPI_Send(&IntSumm,1,MPI_FLOAT,0,2,MPI_COMM_WORLD);
 		
 		}
 	}

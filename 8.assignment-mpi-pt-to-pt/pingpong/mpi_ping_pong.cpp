@@ -11,31 +11,28 @@ int main (int argc, char* argv[]) {
   int element;
   MPI_Init(&argc,&argv);
   element = stoi(argv[1]);
+	int rankMPI, sizeMPI;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rankMPI);
+  MPI_Comm_size(MPI_COMM_WORLD, &sizeMPI);
 
-  // rank and size
-  int rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  int size;
-  MPI_Comm_size(MPI_COMM_WORLD, &size);
-
-  int number;
-  if (rank == 0) {
+  int Val;
+  if (rankMPI == 0) {
       //element
-    number = element;
+    Val = element;
       //send and receive
-    MPI_Send(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
+    MPI_Send(&Val, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
     cout<<"Send from 0 to 1"<<endl;
-    MPI_Recv(&number, 1, MPI_INT, 1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    MPI_Recv(&Val, 1, MPI_INT, 1, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
     cout<<"After adding Recive"<<endl;
-    cout<<"After adding: " <<number<<endl;
-  } else if (rank == 1) {
+    cout<<"After adding: " <<Val<<endl;
+  } else if (rankMPI == 1) {
       
       //receive add and send
-    MPI_Recv(&number, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+    MPI_Recv(&Val, 1, MPI_INT, 0, 0, MPI_COMM_WORLD,MPI_STATUS_IGNORE);
     cout<<"Received to 1 from 0"<<endl;
 
-    number = number + 2;
-    MPI_Send(&number, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+    Val = Val + 2;
+    MPI_Send(&Val, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
     cout<<"Sending to 0 from 1 after adding"<<endl;
 
   }
